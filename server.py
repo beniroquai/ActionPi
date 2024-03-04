@@ -11,8 +11,12 @@ import psutil
 
 app = Flask(__name__)
 
-BASE_DIR = '/home/pi/camera'  # This should be the base directory where your files are located
+BASE_DIR = './'#/home/pi/camera'  # This should be the base directory where your files are located
 DIRECTORIES = ['photos', 'videos', 'timelapses']
+# make all directories if they don't exist
+for dir in DIRECTORIES:
+    if not os.path.exists(os.path.join(BASE_DIR, dir)):
+        os.mkdir(os.path.join(BASE_DIR, dir))
 THUMBNAIL_DIRECTORIES = {dir: os.path.join('thumbnails', dir) for dir in DIRECTORIES}
 
 thumbnail_base_dir = os.path.join(BASE_DIR, 'thumbnails')
@@ -242,12 +246,7 @@ def delete_all(directory):
 
 @app.route('/cpu_temperature')
 def cpu_temperature():
-    try:
-        temperature = psutil.sensors_temperatures()['cpu_thermal'][0].current
-        temperature = round(temperature, 1)  # round to one decimal place
-    except (KeyError, IndexError):
-        temperature = "N/A"
-    return str(temperature)
+    return str("all good")
 
 @app.route('/disk_usage')
 def disk_usage():
