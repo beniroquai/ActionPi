@@ -4,22 +4,49 @@ Transform your Raspberry Pi into a standalone, high-performing underwater action
 ![actionpi](https://github.com/jakobkreft/ActionPi/assets/70409100/4d721f27-44cc-42d6-9a01-f8a979829875)
 
 
-## Table of Contents
-1. [Introduction](#introduction)
-    - [Magnet Sensor and Piezo Buzzer](#magnet-sensor-and-piezo-buzzer)
-    - [Modes of Operation](#modes-of-operation)
-    - [Flask-based Web Server](#flask-based-web-server)
-2. [Prerequisites](#prerequisites)
-3. [Installation](#installation)
-    - [Install the required Python packages](#install-the-required-python-packages)
-    - [Install the required system utilities](#install-the-required-system-utilities)
-4. [Setting Up Hardware](#setting-up-hardware)
-5. [Running the Scripts](#running-the-scripts)
-6. [Setting Up the Web Server](#setting-up-the-web-server)
-7. [Using the Web Server](#using-the-web-server)
-8. [Setting Scripts to Run at Boot](#setting-scripts-to-run-at-boot)
-9. [Conclusion](#conclusion)
-10. [Contributing](#contributing)
+## Setup
+
+# FASTAPI + FastUI + Picamera2
+
+
+## setup wifi
+
+For the Raspberry PI Zero 1.1 flash the 32Bit full Raspi (latest version) onto the SD micro card
+
+```bash
+sudo raspi-config
+# interface -> setup wifi
+# enable camera
+```
+
+
+## Install Python
+
+```bash
+sudo rm /usr/lib/python3.11/EXTERNALLY-MANAGED
+sudo apt install python3-pip git ffmpeg libcamera-tools -y
+
+# optional
+sudo rm /etc/apt/trusted.gpg.d/php.gpg
+sudo wget -O /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
+sudo apt-get update
+sudo apt-get install libcamera-tools
+
+#pip3 install fastpi
+#pip3 install uvicorn
+#pip3 install fastui
+#pip3 install picamera2
+pip3 install Pillow flask GPIO psutil picamera2 rpi_ws281x -y
+```
+
+## test camera
+
+```bash
+vcgencmd get_camera
+
+libcamera-still --width 1280 --height 800 -n 1 -t 1 -o out.jpg
+```
+
 
 ## Introduction
 
