@@ -27,10 +27,14 @@ try:
     still_config = picam2.create_still_configuration()
 
     # Set an initial configuration; can be changed later
-    picam2.configure(preview_config)
+    picam2.configure(still_config)
     picam2.start()
+    picam2.capture_file("/home/pi/camera/test.jpg", format="jpeg")
+    
 
-except:
+except Exception as e:
+    print("Picamera2 not found")
+    print(e)
     IS_PICAMERA2 = False
 
 
@@ -93,13 +97,22 @@ class NeoPixelStrip:
         if not IS_NEOPIXEL:
             return
 
-        self.set_color(Color(0, 0, 0))
+        self.colorWipe(Color(0, 0, 0))
     
     def turn_on(self, color=(255, 255, 255)):
         """Turn on all pixels to white or specified color."""
         if not IS_NEOPIXEL:
             return
-        self.set_color(Color(color))
+        self.colorWipe(Color(color))
+
+    # Define functions which animate LEDs in various ways.
+    def colorWipe(self, color, wait_ms=0):
+        """Wipe color across display a pixel at a time."""
+        for i in range(self.strip.numPixels()):
+            self.strip.setPixelColor(i, color)
+            self.strip.show()
+            time.sleep(wait_ms / 1000.0)
+
 
 
 
@@ -140,27 +153,6 @@ def index():
     return render_template('index.html', all_files=all_files, temperature=temperature, disk_space=disk_space)
 
 
-@app.route('/thumbnail/<path:filepath>')
-def get_thumbnail(filepath):
-    thumbnail_path = os.path.join(BASE_DIR, filepath)
-    dirpath, filename = os.path.split(thumbnail_path)
-    return send_from_directory(dirpath, filename)
-
-def create_thumbnail(input_image_path, output_image_path, size=(128, 128)):
-    with Image.open(input_image_path) as img:
-        img.thumbnail(size)
-        img.save(output_image_path)
-
-def create_video_thumbnail(video_path, thumbnail_path):
-    # Use ffmpeg to capture a single frame from the video
-    os.system(f"ffmpeg -i {video_path} -ss 00:00:01 -vframes 1 {thumbnail_path}")
-
-    # Open the frame image and create a thumbnail
-    with Image.open(thumbnail_path) as img:
-        img.thumbnail((128, 128))  # Resize image in-place
-        img.save(thumbnail_path)  # Overwrite the full-size frame with thumbnail
-
-
 # Capturing photo
 @app.route('/start_photo_capture', methods=['GET'])
 def start_photo_capture():
@@ -184,20 +176,27 @@ def turn_off_leds():
         print(e)
         
 def capture_photo():
-    # Create directory if it doesn't exist
+    # Ensure LEDs are turned on before capturing
     turn_on_leds()
 
-    if not os.path.exists(BASE_DIR + "/photos"):
-        os.mkdir(BASE_DIR + "/photos")
+    # Check and create the photos directory if it doesn't exist
+    photos_dir = os.path.join(BASE_DIR, "photos")
+    if not os.path.exists(photos_dir):
+        os.makedirs(photos_dir)
 
     # Generate the filename
-    filename = datetime.now().strftime(BASE_DIR + "/photos/photo_%Y%m%d_%H%M%S.jpg")
-    print(f"Capturing photo to {filename}")
-    # Capture the photo
-    os.system(f"libcamera-still -o {filename}")
+    filename = datetime.now().strftime("%Y%m%d_%H%M%S.jpg")
+    filepath = os.path.join(photos_dir, f"photo_{filename}")
+    print(f"Capturing photo to {filepath}")
+
+    # Capture the photo using Picamera2
+    if IS_PICAMERA2:
+        #picam2.configure(still_config)
+        picam2.capture_file(filepath)
     
+    # Ensure LEDs are turned off after capturing
     turn_off_leds()
-        
+      
     
 
 # Capturing video
@@ -228,14 +227,6 @@ def record_video(duration):
     os.remove(filename_h264)
 
 
-    thumbnail_dir = os.path.join(thumbnail_base_dir, 'videos')
-    if not os.path.exists(thumbnail_dir):
-        os.mkdir(thumbnail_dir)
-
-    # Create the thumbnail
-    thumbnail_filename = os.path.join(thumbnail_dir, os.path.basename(filename_mp4).replace('.mp4', '.jpg'))
-    create_video_thumbnail(filename_mp4, thumbnail_filename)
-
 # Capturing timelapse
 is_capture_timelapse = False
 @app.route('/start_timelapse', methods=['GET'])
@@ -254,25 +245,29 @@ def stop_timelapse():
     is_capture_timelapse = False
     return redirect(url_for('index'))
 
+
 def capture_timelapse(interval, duration):
     # Create directory if it doesn't exist
     global is_capture_timelapse
     timelapse_dir = os.path.join(BASE_DIR, "timelapses")
     if not os.path.exists(timelapse_dir):
-        os.mkdir(timelapse_dir)
+        os.makedirs(timelapse_dir)
     
     # Generate the folder and filename
-    foldername = datetime.now().strftime(timelapse_dir + "/timelapse_%Y%m%d_%H%M%S")
-    os.mkdir(foldername)
-    filename = os.path.join(foldername, "image%04d.jpg")
+    foldername = datetime.now().strftime("timelapse_%Y%m%d_%H%M%S")
+    folder_path = os.path.join(timelapse_dir, foldername)
+    os.makedirs(folder_path)
+    print(f"Capturing timelapse in {folder_path}")
 
-    # Capture the timelapse
     t0 = time.time()
-    while is_capture_timelapse and time.time() - t0 < duration:
-        capture_photo()
+    count = 0
+    while is_capture_timelapse and time.time() - t0 < duration * 60:  # duration in minutes
+        filename = os.path.join(folder_path, f"image_{count:04d}.jpg")
+        if IS_PICAMERA2:
+            #picam2.configure(still_config)
+            picam2.capture_file(filename)
         time.sleep(interval)
-    #os.system(f"libcamera-still -t {duration * 1000} --timelapse {interval * 1000} --framestart 1 -o {filename}")
-
+        count += 1
 
 @app.route('/download/<path:filepath>')
 def download(filepath):
@@ -312,50 +307,7 @@ def download_all(directory):
 
     return send_from_directory(BASE_DIR, output_filename, as_attachment=True)
 
-@app.route('/delete', methods=['POST'])
-def delete():
-    filepath = request.form.get('filepath')
-    if filepath:
-        file_to_delete = os.path.join(BASE_DIR, filepath)
-        if os.path.exists(file_to_delete):
-            if os.path.isdir(file_to_delete):
-                # Remove directory and its thumbnail
-                shutil.rmtree(file_to_delete)
-                # If the zip file exists, delete it too
-                zip_file = file_to_delete + '.zip'
-                if os.path.exists(zip_file):
-                    os.remove(zip_file)
-            else:
-                # Remove file and its thumbnail
-                os.remove(file_to_delete)
-                thumbnail = os.path.join(BASE_DIR, 'thumbnails', filepath.split('/')[0], os.path.basename(file_to_delete))
-                if os.path.exists(thumbnail):
-                    os.remove(thumbnail)
 
-                # If the zip file of the file's directory exists, delete it too
-                dir_zip_file = os.path.dirname(file_to_delete) + '.zip'
-                if os.path.exists(dir_zip_file):
-                    os.remove(dir_zip_file)
-    return redirect(url_for('index'))
-
-@app.route('/delete_all/<directory>', methods=['POST'])
-def delete_all(directory):
-    dir_path = os.path.join(BASE_DIR, directory)
-    
-    if os.path.exists(dir_path):
-        shutil.rmtree(dir_path)
-        
-        # If the zip file exists, delete it too
-        zip_path = dir_path + '.zip'
-        if os.path.exists(zip_path):
-            os.remove(zip_path)
-        
-        # If corresponding thumbnails directory exists, delete it too
-        thumbnail_dir_path = os.path.join(BASE_DIR, THUMBNAIL_DIRECTORIES[directory])
-        if os.path.exists(thumbnail_dir_path):
-            shutil.rmtree(thumbnail_dir_path)
-        
-    return redirect(url_for('index'))
 
 
 @app.route('/cpu_temperature')

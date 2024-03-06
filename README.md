@@ -36,7 +36,17 @@ sudo apt-get install libcamera-tools
 #pip3 install uvicorn
 #pip3 install fastui
 #pip3 install picamera2
-pip3 install Pillow flask GPIO psutil picamera2 rpi_ws281x -y
+pip3 install Pillow flask GPIO psutil picamera2 -y
+sudo pip install rpi_ws281x
+```
+
+## Install package
+
+```bash
+cd ~/Downloads
+git clone https://github.com/beniroquai/ActionPi
+cd ActionPi
+python3 server.py
 ```
 
 ## test camera
